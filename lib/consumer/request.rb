@@ -84,6 +84,11 @@ class Consumer::Request
       @request_pass
     end
 
+    def http_method(method = nil)
+      @http_method = method if method
+      @http_method
+    end
+
     def url(url = nil)
       @url = url if url
       @url
@@ -92,6 +97,17 @@ class Consumer::Request
     def required(*args)
       @required = args if !args.empty?
       @required || []
+    end
+
+    # Default to using compact XML because more services choke on empty tags
+    # than do ones that choke on missing tags that are optional.
+    def use_compact_xml(use = true)
+      @use_compact_xml = use
+    end
+
+    # In case the option is never specified, assume true
+    def use_compact_xml?
+      @use_compact_xml.nil? ? true : false
     end
  
     def response_class(klass = nil)
@@ -176,12 +192,16 @@ class Consumer::Request
     
     uri = URI.parse url
     http = Net::HTTP.new uri.host, uri.port
-    req = Net::HTTP::Post.new(uri.request_uri, heads)
+    if http_method == 'GET'
+      req = Net::HTTP::Get.new(uri.request_uri, heads)
+    else
+      req = Net::HTTP::Post.new(uri.request_uri, heads)
+    end
     if uri.port == 443
       http.use_ssl = true
       http.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
-    req.basic_auth @request_user, @request_pass if @request_user && @request_pass
+    req.basic_auth request_user, request_pass if request_user && request_pass
     req.body = @request_xml
     puts "\n##### Request to #{url}:\n\n#{@request_xml}\n" if $DEBUG
     debugger if $CONSUMER_POST_DEBUGGER
@@ -203,14 +223,14 @@ class Consumer::Request
   # Then it calls check_required, then returns the results of to_xml sans
   # empty nodes (see Helper.compact_xml).
   # 
-  # You can set a COMPACT_XML constant to false to avoid the latter behavior,
-  # but most APIs complain when you send them empty nodes (even if the nodes
-  # were optional to begin with).
+  # You can set this option with use_compact_xml false on the class level
+  # to avoid the latter behavior, but most APIs complain when you
+  # send them empty nodes (even if the nodes were optional to begin with).
   def to_xml_etc
     self.before_to_xml if defined?(before_to_xml)
     self.check_required
     xml = self.to_xml
-    return (defined?(COMPACT_XML) && !COMPACT_XML) ? xml : Helper.compact_xml(xml)
+    return (use_compact_xml? ? Helper.compact_xml(xml) : xml)
   end
  
   # returns self.class.response_class as a constant (not a string)
@@ -222,12 +242,20 @@ class Consumer::Request
     return Object.const_get(ret)
   end
 
+  def use_compact_xml?
+    self.class.use_compact_xml?
+  end
+
   def request_user
     self.class.request_user
   end
 
   def request_pass
     self.class.request_pass
+  end
+
+  def http_method
+    self.class.http_method
   end
  
   def error_paths
