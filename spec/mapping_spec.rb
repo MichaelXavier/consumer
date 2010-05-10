@@ -48,12 +48,10 @@ describe Consumer::Mapping do
     object.price.should == "5.00"
   end
   
-  it "raises an error if you try to define the same map root twice" do
-    MockObject.map(:first, "//CarrierResponse",{:something => "woot"})
+  it "return the existing map if you try to define the same map root twice" do
+    original = MockObject.map(:first, "//CarrierResponse",{:something => "woot"})
 
-    lambda {
-      MockObject.map(:first, "//CarrierResponse",{:another => "AAA"})
-    }.should raise_error
+    MockObject.map(:first, "//CarrierResponse",{:another => "AAA"}).should == original
   end
   
   it "calls map blocks" do
